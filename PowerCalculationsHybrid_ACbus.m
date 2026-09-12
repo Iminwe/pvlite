@@ -1,3 +1,8 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% PowerCalculationsHybrid_ACbus.m
+% Copyright: Itahisa Hernández Fumero. 2026.
+% Instituto de Energía Solar. Universidad Politécnica de Madrid.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %Power calculations
 %Matrix initialisation to zero
 PDC=zeros(Nsteps, Ndays);
@@ -27,15 +32,16 @@ end
 PAC=PLOAD;
 PAC1=PLOAD;
 PAC0=PAC1./((1-(WAC/100)*(PAC1/PInom)));
-pac=PAC0/PInom;
 
-%Checking maximum load vs maximum inverter power
-if PImax<max(max(PAC0))
-    disp('Attention: Undersized inverter')
-    Maximum_Inverter_Power=PImax
-    Maximum_Load_Power=max(max(PAC0))
-    error('Simulation stopped: increase the maximum inverter power');
+% Mixed node configuration (AC and DC coupled PV)
+if ~exist('PV_DC_share', 'var')
+    PV_DC_share = 0.5; % Default to 50% PV on DC bus, 50% on AC bus
 end
+PPV_AC = PPV * (1 - PV_DC_share);
+PPV_DC = PPV * PV_DC_share;
+
+%Calculate AC power from PV using Grid Inverter
+ACpowerGridInverter;
 
 %Initial SOC and genset operation
 SOCprev=SOCmax; 
@@ -43,13 +49,7 @@ SOCprev=SOCmax;
 %Calculations
 for d=1:Ndays
     for h=1:Nsteps
-        %Power at the inverter input
-        pdc(h,d)=pac(h,d) + k0 + k1*pac(h,d) + k2*(pac(h,d)^2);
-        PDC(h,d)=pdc(h,d)*PInom;
 
-        %Inverter efficiency
-        ETAI(h,d)=pac(h,d)/pdc(h,d);
-        
         %Genset power
         GENON(1,1)=0;
         if(SOCprev<SOCstart)
@@ -57,7 +57,7 @@ for d=1:Ndays
             GENON(h,d)=1;
             PGEN(h,d)=PGENnom;
         elseif (SOCprev>=SOCstart && SOCprev<=SOCstop && GENON(h,d)==1)
-                PGEN(h,d)=PGENnom;
+            PGEN(h,d)=PGENnom;
         elseif (SOCprev>SOCstop && GENON(h,d)==1 )
             %Genset stops
             GENON(h,d)=0;
@@ -84,15 +84,46 @@ for d=1:Ndays
             PWIND(h,d)=0;
         end
 
-        %Total generated power
-        PTOT(h,d)=PPV(h,d)+PGEN(h,d)+PWIND(h,d);
+        %Total generated power on AC bus
+        PTOT(h,d)=PAC_g(h,d)+PGEN(h,d)+PWIND(h,d);
 
-        %Battery power
-        %Total power less inverter power
-        PBAT(h,d)=PTOT(h,d)-PDC(h,d);
+        %PTOT > PLOAD: excess AC goes through the bidirectional inverter to charge
+        %PTOT < PLOAD: the shortfall comes from the battery via the same inverter
+        
+        %Let's calculate net AC power:
+        P_AC_NET = PTOT(h,d) - PLOAD(h,d);
+        
+        %P_AC_NET > 0: charging, via the bidirectional inverter as rectifier
+        if P_AC_NET > 0
+            pac(h,d) = P_AC_NET / PInom;
+            if pac(h,d) > PImax/PInom
+                pac(h,d) = PImax/PInom; %Saturation of rectifier
+            end
+            pdc(h,d) = pac(h,d) - (k0 + k1*pac(h,d) + k2*(pac(h,d)^2));
+            if pdc(h,d) < 0
+                pdc(h,d) = 0;
+            end
+            PBAT_from_AC = pdc(h,d) * PInom;
+            
+            % Total battery power (DC PV + Rectified AC excess)
+            PBAT(h,d) = PBAT_from_AC + PPV_DC(h,d);
+            PDC(h,d) = 0; %No DC load
+        else
+            %Discharging battery to cover AC deficit
+            pac(h,d) = abs(P_AC_NET) / PInom;
+            if pac(h,d) > PImax/PInom
+                pac(h,d) = PImax/PInom;
+            end
+            pdc(h,d) = pac(h,d) + k0 + k1*pac(h,d) + k2*(pac(h,d)^2);
+            P_DC_req = pdc(h,d) * PInom;
+            
+            % Battery power is DC PV minus DC required for AC inverter
+            PBAT(h,d) = PPV_DC(h,d) - P_DC_req; 
+            PDC(h,d) = 0;
+        end
       
         %Discharge of the battery
-        if (PBAT(h,d)<=0)
+        if (PBAT(h,d) < 0)
             %Available capacity for discharging
             Cuse(h,d)=(SOCprev-SOCmin)*CBAT;
             if (abs(PBAT(h,d))/Stepph)<=Cuse(h,d)
@@ -101,16 +132,26 @@ for d=1:Ndays
                 SOC(h,d)=SOCprev-(abs(PBAT(h,d))/Stepph)/CBAT;
             else
                 %There is not enough capacity to discharge
-                %The inverter swithes off
+                %The bidirectional inverter swithes off
                 InverterOFF;
                 %Loss of load flag
                 LLH(h,d)=1;
                 %Overdischarge flag
                 OVD(h,d)=1;
-                %The generated power is used for charging the battery
-                PBAT(h,d)=PTOT(h,d);
-                %SOC calculation
-                SOC(h,d)=SOCprev+(PBAT(h,d)/Stepph)/CBAT;
+                
+                % Since bidirectional inverter is OFF, battery only sees DC PV
+                PBAT(h,d) = PPV_DC(h,d);
+                
+                % Check if PPV_DC can be charged into the battery
+                Cuse_charge=(SOCmax-SOCprev)*CBAT;
+                if (PBAT(h,d)/Stepph <= Cuse_charge)
+                    SOC(h,d)=SOCprev+(PBAT(h,d)/Stepph)/CBAT;
+                else
+                    % Regulate DC PV
+                    PBAT(h,d) = Cuse_charge*Stepph;
+                    PPV_DC(h,d) = PBAT(h,d);
+                    SOC(h,d)=SOCmax;
+                end
             end
         end
 

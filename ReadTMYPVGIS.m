@@ -12,11 +12,30 @@
 % Tmm, monthly average of daily minimum ambient temperatures, ºC
 
 %Select the file .xls
-file_tmypvgis=uigetfile('*.csv','Select TMY-PVGIS file');
+%Anchor ddbb to this script's location, not the working directory
+tmy_script_dir = fileparts(mfilename('fullpath'));
+if isempty(tmy_script_dir)
+    tmy_script_dir = pwd;    % script body pasted into the Command Window
+end
+ddbb_dir = fullfile(tmy_script_dir, 'ddbb');
+if exist('run_as_test', 'var') && run_as_test
+    file_tmypvgis = fullfile(ddbb_dir, 'tmy_40.525_-3.772_2005_2020_Madrid.csv');
+else
+    [file, path] = uigetfile(fullfile(ddbb_dir, '*.csv'),'Select TMY-PVGIS file');
+    if isequal(file,0)
+        error('File not selected');
+    end
+    file_tmypvgis = fullfile(path, file);
+end
 
 %Print error if the file is not selected
 if isequal(file_tmypvgis,0)
     error('File not selected');
+end
+
+%Fail if the meteo file cannot be located
+if ~isfile(file_tmypvgis)
+    error('PVlite:ReadTMYPVGIS:FileNotFound', 'TMY-PVGIS file not found: %s', file_tmypvgis);
 end
 
 %Open the file (read mode)

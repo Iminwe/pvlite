@@ -79,6 +79,12 @@ if(Application==3 || Application==4)
     EGENd=sum(PGEN)/Stepph;
     %Wind energy
     EWINDd=sum(PWIND)/Stepph;
+    %Dumped/excess energy
+    if exist('PDUMP','var')
+        EDUMPd=sum(PDUMP)/Stepph;
+    else
+        EDUMPd=zeros(1,Ndays);
+    end
 end
 if(Application==5)
     %PV pumping

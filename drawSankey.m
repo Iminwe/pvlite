@@ -1,4 +1,4 @@
-function drawSankey(inputs, losses, unit, labels, varargin)
+function [yBottom, xCenter] = drawSankey(inputs, losses, unit, labels, varargin)
 
 % drawSankey(inputs, losses, unit, labels, sep)
 %
@@ -21,6 +21,10 @@ function drawSankey(inputs, losses, unit, labels, varargin)
 % sep:    an (optional) list of position for separating lines, placed after
 %         the loss corresponding to the indexes provided
 %
+% yBottom: (optional) lowest y coordinate reached by the arrows
+%
+% xCenter: (optional) horizontal midpoint of the main flow body
+%
 % For an example, copy and paste the lines below to the command line:
 %
 %   inputs = [75 32]; losses = [10 5 2.8]; unit = 'MW'; sep = [1,3];
@@ -28,9 +32,11 @@ function drawSankey(inputs, losses, unit, labels, varargin)
 %
 %   drawSankey(inputs, losses, unit, labels, sep);
 %
-% Current Version:  02.11.2009
+% Previous Version:  02.11.2009
 % Developped by:    James SPELLING, KTH-EGI-EKV
 %                   spelling@kth.se
+% Current Version:  01.07.2026
+% Modified by: Itahisa HernÃ¡ndez Fumero
 %
 % Distributed under Creative Commons Attribution + NonCommerical (by-nc)
 % Licensees may copy, distribute, display, and perform the work and make
@@ -53,7 +59,7 @@ else
     if nargin > 4; sep = varargin{1}; end
     
     %create plotting window%
-    figure('color','white','tag','sankeyDiagram');
+    figure('Name', 'Sankey diagram','color','white','tag','sankeyDiagram','Position',[80 80 1200 650]);
     
     %if possible, maximise figure%
     if exist('maximize','file')
@@ -66,6 +72,9 @@ else
     %calculate fractional losses and inputs%
     frLosses = losses/sum(inputs);
     frInputs = inputs/sum(inputs);
+    
+    %lowest y reached%
+    minY = 0;
     
     if length(inputs(inputs > eps)) == 1
         
@@ -80,10 +89,10 @@ else
     end
     
     %determine first input label font size%
-    fontsize = min(16, 10 + ceil((frInputs(1)-0.05)/0.025));
+    fontsize = min(12, 10 + ceil((frInputs(1)-0.05)/0.025));
     
     %draw first input label to plotting window%
-    text(0, frInputs(1)/2, inputLabel, 'FontSize', fontsize,'HorizontalAlignment','right','Rotation',0);
+    text(-0.06, frInputs(1)/2, inputLabel, 'FontSize', fontsize,'HorizontalAlignment','right','Rotation',0);
     
     %draw back edge of first input arrow%
     line([0.1 0 0.05 0 0.4], [0 0 frInputs(1)/2 frInputs(1) frInputs(1)], 'Color', 'black', 'LineWidth', 2.5);
@@ -104,8 +113,11 @@ else
             rI = max(0.07, abs(frInputs(j)/2));
             rE = rI + abs(frInputs(j));
             
+            %horizontal segment start%
+            xSegStart = posBot;
+            
             %push separation point forwards%
-            newPosB = posBot + rE*sin(pi/4) + 0.01;
+            newPosB = posBot + rE*sin(pi/4) + 0.06;
             line([posBot newPosB], [limBot limBot], 'Color', 'black', 'LineWidth', 2.5);
             posBot = newPosB;
             
@@ -129,10 +141,12 @@ else
             %draw back edge of additional input arrows%
             line([min(arcEx) xTip min(arcIx)], [min(arcEy) yTip min(arcIy)], 'Color', 'black', 'LineWidth', 2.5);
             
-            %determine text edge location%
-            phiText = pi/2 - 2*min(0.05, 0.8*abs(frInputs(j)))/(rI + rE);
-            xText = posBot - (rE+rI)*sin(phiText)/2;
-            yText = limBot - rE + (rE+rI)*cos(phiText)/2;
+            %track lowest arrow point%
+            minY = min([minY, min(arcEy), min(arcIy), yTip]);
+            
+            %label below input segment%
+            xText = xSegStart - 0.02;
+            yText = limBot - 0.50;
             
             %determine label size based on importance%
             if frInputs(j) > 0.1
@@ -156,7 +170,7 @@ else
             end
             
             %draw input label%
-            text(xText, yText, fullLabel, 'FontSize', min(16, fontsize),'HorizontalAlignment','right');
+            text(xText, yText, fullLabel, 'FontSize', min(12, fontsize),'HorizontalAlignment','right','VerticalAlignment','top');
             
             %save new bottom end of arrow%
             limBot = limBot - frInputs(j);
@@ -200,7 +214,7 @@ else
             
             %determine text edge location%
             txtX = posTop + rI + frLosses(i)/2;
-            txtY = limTop + rI + arTop + 0.05;
+            txtY = limTop + rI + arTop + 0.12;
             
             %determine label size based on importance%
             if frLosses(i) > 0.1
@@ -217,20 +231,20 @@ else
             
             else
             
-                %minimum siye single line label%
+                %minimum size single line label%
                 fullLabel = sprintf('%s: %.1f [%%]',labels{i+length(inputs)}, 100*frLosses(i));
                 fontsize = 10;
             
             end
             
             %draw losses label%
-            text(txtX, txtY, fullLabel, 'Rotation', 90, 'FontSize', fontsize);
+            text(txtX, txtY, fullLabel, 'Rotation', 90, 'FontSize', min(12, fontsize));
             
             %save new position of arrow top%
             limTop = limTop - frLosses(i);
             
             %advance to new separation point%
-            newPos = posTop + rE + 0.01;
+            newPos = posTop + rE + 0.08;
             
             %draw top line to new separation point%
             line([posTop newPos], [limTop limTop], 'Color', 'black', 'LineWidth', 2.5);
@@ -264,6 +278,9 @@ else
     
     %push the arrow forwards a little after all side-arrows drawn%
     newPos = max(posTop, posBot) + max(0.05*limTop, 0.05);
+
+    %flow body midpoint%
+    xCenter = newPos/2;
     
     %draw lines to this new position%
     line([posTop, newPos],[limTop limTop], 'Color', 'black', 'LineWidth', 2.5);
@@ -280,20 +297,21 @@ else
     inputFinal = sum(inputs);
 
     %create the label for the overall output arrow%
-    %endText = sprintf('%s\n%.0f [%s] %.1f [%%]',labels{length(losses)+length(inputs)+1}, outputFinal, unit,100*outputFinal/inputFinal);
-    %La línea anterior es la original de drawSankey y ha sido sustituida por la siguiente que imprime la etiqueta final que se le pasa a la función como argumento
     endText = sprintf('%s',labels{length(losses)+length(inputs)+1});
-    fontsize = min(16, 10 + ceil((1-sum(frLosses)-0.1)/0.05));
+    fontsize = min(12, 10 + ceil((1-sum(frLosses)-0.1)/0.05));
     
     %draw text for the overall output arrow%
-    text(newPos + 0.05, (limTop+limBot)/2, endText, 'FontSize', fontsize);
+    text(newPos + 0.12, (limTop+limBot)/2, endText, 'FontSize', fontsize);
     
     %set correct aspect ratio%
     axis equal;
     
     %set correct axis limits%
-    set(gca,'YLim',[frInputs(1)-sum(frInputs)-0.4, frInputs(1)+frLosses(1)+0.4]);
-    set(gca,'XLim',[-0.15, newPos + 0.1]);
+    set(gca,'YLim',[minY - 0.9, frInputs(1)+frLosses(1)+1.0]);
+    set(gca,'XLim',[-0.85, newPos + 1.2]);
+    
+    %return yBottom%
+    yBottom = minY - 0.1;
        
 end
 

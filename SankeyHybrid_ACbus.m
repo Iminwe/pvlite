@@ -1,3 +1,10 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SankeyHybrid_ACbus.m
+% Copyright: Itahisa Hernández Fumero. 2026.
+% Instituto de Energía Solar. Universidad Politécnica de Madrid.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Sankey diagram for Hybrid AC bus systems
+
 %Input, reference yield
 input=[Yr*PVnom EGENa EWINDa];
 Text0='PV';
@@ -21,7 +28,7 @@ end
 p3=(EPV1a-EPV2a);
 Text3='DC wiring';
 
-%Inverter saturation
+%Inverter saturation & curtailment
 p4=(EPV2a-EPV3a);
 Text4='Battery fully charged';
 
@@ -29,15 +36,22 @@ Text4='Battery fully charged';
 if exist('BatteryModel', 'var') && BatteryModel == 2
     p_bat = sum(sum(ELOSS_BAT));
     Text_bat = 'Battery losses';
+else
+    p_bat = 0; % Ideal battery
 end
-
-%Inverter efficiency
-p5=(EDCa-EAC0a);
-Text5='Inverter';
 
 %AC wiring
 p6=(EAC0a-EAC1a);
 Text6='AC wiring';
+
+%Conversion/inversion losses: grid and bidirectional inverters
+total_input = Yr*PVnom + EGENa + EWINDa;
+p5 = total_input - EAC0a - (p1 + p2 + p3 + p4 + p_bat);
+%Avoid negative residual due to precision errors
+if p5 < 0
+    p5 = 0;
+end
+Text5='Conversion (Inv/Rect)';
 
 %Diagram labels
 %Horizontal irradiation
@@ -61,6 +75,6 @@ else
 end
 unit = 'kWh';
 sep = [1,3];
-%Additional notes not overlapping the input arrows
-[yBottom_sankey] = drawSankey(input, losses, unit, labels, sep);
-text(1, yBottom_sankey, label_irradiation, 'FontSize', 12, 'HorizontalAlignment','right', 'VerticalAlignment', 'Top');
+%Additional note below the diagram, centred and clear of the input arrows
+[yBottom_sankey, xCenter_sankey] = drawSankey(input, losses, unit, labels, sep);
+text(xCenter_sankey, yBottom_sankey, label_irradiation, 'FontSize', 12, 'HorizontalAlignment','center', 'VerticalAlignment', 'Top');

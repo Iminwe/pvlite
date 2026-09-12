@@ -41,7 +41,7 @@ Text8='Pump';
 
 %Diagram labels
 %Horizontal irradiation
-label_irradiation=sprintf('%s %s%s\n\n\n', 'Global horizontal yearly irradiation: ', num2str(G0a/1000, '%.1f'), ' [kWh/m^2]'); 
+label_irradiation=sprintf('%s\n %s%s\n\n\n', 'Global horizontal yearly irradiation: ', num2str(G0a/1000, '%.1f'), ' [kWh/m^2]'); 
 %Final label
 label_final = sprintf('%s\n  %s%s\n%s\n  %s%s\n%s\n  %s%s\n%s\n  %s%s', ...
 'AC energy', num2str(EACa/PVnom, '%.1f'), ' [kWh/kWp]', ... 
@@ -54,6 +54,6 @@ losses = [p1 p2 p3 p4 p5 p6 p7 p8];
 unit = 'kWh/kWp';
 sep = [1,3];
 labels = {Text0, Text1, Text2, Text3, Text4, Text5, Text6, Text7, Text8, label_final};
-drawSankey(input, losses, unit, labels, sep);
-%text(-0.1, 1.1, label_irradiation, 'FontSize', 16, 'HorizontalAlignment','right', 'VerticalAlignment', 'Bottom');
-text(1, -0.5, label_irradiation, 'FontSize', 16, 'HorizontalAlignment','right', 'VerticalAlignment', 'Bottom');
+%Additional notes not overlapping the input arrows
+[yBottom_sankey] = drawSankey(input, losses, unit, labels, sep);
+text(1, yBottom_sankey, label_irradiation, 'FontSize', 12, 'HorizontalAlignment','right', 'VerticalAlignment', 'Top');

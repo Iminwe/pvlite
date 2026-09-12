@@ -1,0 +1,10 @@
+Name,Manufacturer,Technology,BatteryType,NominalCapacity_kWh,MKBM_c,MKBM_k,MKBM_eta_ch,MKBM_eta_dis,MKBM_Pmax_ch_kW,MKBM_Pmax_dis_kW,MKBM_LifeCycles,MKBM_LifeDoD,MKBM_CalendarLife,MKBM_MinChargeTemp,MKBM_MaxChargeTemp,MKBM_MinDischargeTemp,MKBM_MaxDischargeTemp,MKBM_SelfDischarge
+Units,,,,kWh,-,1/h,-,-,kW,kW,cycles,-,years,degC,degC,degC,degC,%/month
+[0],lib_manufacturer,lib_technology,lib_type,lib_capacity,lib_c,lib_k,lib_eta_ch,lib_eta_dis,lib_pmax_ch,lib_pmax_dis,lib_cycles,lib_dod,lib_calendar,lib_min_charge_temp,lib_max_charge_temp,lib_min_discharge_temp,lib_max_discharge_temp,lib_self_discharge
+Pylontech US2000C,Pylontech,Li-ion LFP,2,2.4,0.85,2.0,0.96,0.96,1.2,1.2,6000,0.8,10,0,50,-10,50,3
+Tesla Powerwall 2,Tesla,Li-ion NMC,3,13.5,0.90,3.0,0.95,0.95,5.0,5.0,3200,1.0,10,-20,50,-20,50,3
+BYD Battery-Box HVS 5.1,BYD,Li-ion LFP,2,5.12,0.85,2.0,0.96,0.96,5.12,5.12,6000,0.8,10,-10,50,-10,50,3
+LG Chem RESU10H,LG Chem,Li-ion NMC,3,9.8,0.90,3.0,0.95,0.95,5.0,5.0,4000,0.8,10,-10,45,-10,45,3
+Trojan T-105,Trojan,Lead-acid,1,1.35,0.315,0.43,0.85,0.85,0.2,1.0,1200,0.5,5,-40,60,-40,60,10
+Rolls Surrette S-550,Rolls,Lead-acid,1,2.57,0.315,0.43,0.85,0.85,0.3,1.5,1500,0.5,7,,,,,
+SonnenBatterie eco 8.0,Sonnen,Li-ion LFP,2,8.0,0.85,2.0,0.96,0.96,3.3,3.3,10000,1.0,10,,,,,3

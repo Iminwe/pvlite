@@ -19,5 +19,7 @@ MonthlyParameters;
 YearlyParameters;
 
 %Draw Sankey diagram
-SankeyPump;
+if ~exist('Project_Lifetime', 'var') || Project_Lifetime == 1
+    SankeyPump;
+end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

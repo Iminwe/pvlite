@@ -1,8 +1,16 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%ReadInputData
+% ReadInputData.m
+% Loads all input parameters required for the simulation from the selected Excel spreadsheet.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %Open a window to select the input data excel file
-file1=uigetfile('*.xlsx','Select the input data file');
+if ~exist('file1', 'var') || isempty(file1)
+    [script_dir, ~, ~] = fileparts(mfilename('fullpath'));
+    [file, path] = uigetfile(fullfile(script_dir, 'inputdata', '*.xlsx'),'Select the input data file');
+    if isequal(file,0)
+        error('The file has not been selected');
+    end
+    file1 = fullfile(path, file);
+end
 
 % If the file is not selected, or the window is closed, the program stops.
 if isequal(file1,0)
@@ -59,9 +67,9 @@ if(InputData==1)
     %Read monthly averages from the excel sheet
     %Mean daily global horizonal irradiation, monthly average, Wh/m2.
     Gdm0=NUMERIC(6:17,3)';
-    %Minimum daily temperature, monthly average, ºC.
+    %Minimum daily temperature, monthly average, ÂºC.
     Tmm=NUMERIC(6:17,4)';
-    %Maximum daily temperature, monthly average, ºC.
+    %Maximum daily temperature, monthly average, ÂºC.
     TMm=NUMERIC(6:17,5)';
 elseif (InputData==2 || InputData==3)
     %Read TMY PGIS *.csv file
@@ -85,37 +93,63 @@ TimeSeries=NUMERIC(2,3);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %Read the sheet
 SheetName='PVgen';
-clear NUMERIC TXT;
-[NUMERIC, TXT]=xlsread(file1,SheetName);
+clear NUMERIC TXT RAW;
+[NUMERIC, TXT, RAW]=xlsread(file1,SheetName);
 
-%Nominal PV power
-PVnom=NUMERIC(1,3);
-%Coefficient of Variation of module Power with Temperature (absolute value), %
-CVPT=NUMERIC(2,3);
-%Nominal Operation Cell Temperature, ºC
-NOCT=NUMERIC(3,3);
-%Thermal resistance, ºC·m^2/W
-Rth=NUMERIC(4,3);
+% Detect the new database-style PVgen layout.
+% Legacy workbooks have no Use_Database header
+isNewPV = HasDatabaseHeader(RAW);
+if isNewPV
+    pvOffset = 3;
+else
+    pvOffset = 0;
+end
 
-%Mounting structure
-Mounting=NUMERIC(6,3);
- if (Mounting==1)
-     %Static ground or roof
-     %Inclination of the modules regarding the horizontal, from 0º to 90º.
-     Inclination=NUMERIC(9,3);
-     %Orientation of the modules towards the Equator.
-     %Zero towards the South in the Northern Hemisphere (North in the Southern Hemisphere), negative towards the East, and positive towards the West.
-     Orientation=NUMERIC(10,3);
- elseif (Mounting==2)
-     %Static delta
-     %Inclination of the modules regarding the horizontal, from 0º to 90º.
-     %The same for East and West structrures.
-     Inclination=NUMERIC(13,3);
- elseif (Mounting==4)
-     %Azimutal tracker
-     %Inclination of the modules regarding the horizontal, from 0º to 90º.
-     Inclination=NUMERIC(16,3);
- end
+% The database selector only exists in the new layout.
+if isNewPV && size(NUMERIC,1) >= 1 && ~isnan(NUMERIC(1,3))
+    Use_Database_PV = NUMERIC(1,3);
+else
+    Use_Database_PV = 1; % Default to manual input
+end
+
+if Use_Database_PV == 2
+    % Read module name from Row 5 in Excel, column C
+    module_name = RAW{5, 3};
+    % Read number of modules from Row 6 in Excel, column C
+    N_modules = NUMERIC(3, 3);
+
+    [PVnom_module, CVPT, NOCT] = Load_CEC_Module(module_name);
+
+    % Total PV power = module power * number of modules
+    PVnom = PVnom_module * N_modules;
+
+    % Calculate thermal resistance from NOCT
+    Rth = (NOCT - 20) / 800;
+else
+    module_name = '';
+    N_modules = 1;
+
+    % Manual PV parameters. pvOffset: 3 new sheets, 0 legacy
+    PVnom = NUMERIC(1 + pvOffset, 3);
+    CVPT = NUMERIC(2 + pvOffset, 3);
+    NOCT = NUMERIC(3 + pvOffset, 3);
+    Rth = NUMERIC(4 + pvOffset, 3);
+end
+
+% Mounting structure
+Mounting = NUMERIC(6 + pvOffset, 3);
+if (Mounting == 1)
+    % Static ground or roof
+    Inclination = NUMERIC(9 + pvOffset, 3);
+    Orientation = NUMERIC(10 + pvOffset, 3);
+elseif (Mounting == 2)
+    % Static delta: same inclination for East and West structures
+    Inclination = NUMERIC(13 + pvOffset, 3);
+elseif (Mounting == 4)
+    % Azimuthal tracker
+    Inclination = NUMERIC(16 + pvOffset, 3);
+end
+ 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %End PVgen
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -125,28 +159,55 @@ Mounting=NUMERIC(6,3);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %Read the sheet
 SheetName='Inverter';
-clear NUMERIC TXT;
-[NUMERIC, TXT]=xlsread(file1,SheetName);
+clear NUMERIC TXT RAW;
+[NUMERIC, TXT, RAW]=xlsread(file1,SheetName);
 
-%Nominal output power, kW
-PInom=NUMERIC(1,3);
-%Maximum output power, kW
-PImax=NUMERIC(2,3);
-%Power efficiency curve
-InverterCurve=NUMERIC(3,3);
-if(InverterCurve==1)
-    %Power efficiency curve parameters
-    k0=NUMERIC(5,3);
-    k1=NUMERIC(6,3);
-    k2=NUMERIC(7,3);
+% Detect the new database-style Inverter layout.
+% Legacy workbooks have no Use_Database header
+isNewInv = HasDatabaseHeader(RAW);
+if isNewInv
+    invOffset = 2;
 else
-    %Calculation of the previous parameters starting power efficiency
-    %points
-    [k0, k1, k2]=InverterParameters(NUMERIC(10:15,2), NUMERIC(10:15,3));
+    invOffset = 0;
+end
+
+% The database selector only exists in the new layout.
+if isNewInv && size(NUMERIC,1) >= 1 && ~isnan(NUMERIC(1,3))
+    Use_Database_Inv = NUMERIC(1,3);
+else
+    Use_Database_Inv = 1; % Default to manual input
+end
+
+if Use_Database_Inv == 2
+    % Read inverter name from Row 5 in Excel, column C
+    inverter_name = RAW{5, 3};
+    [PInom, PImax, k0, k1, k2] = Load_CEC_Inverter(inverter_name, 'battery');
+else
+    inverter_name = '';
+
+    % Manual inverter parameters. invOffset: 2 new sheets, 0 legacy
+    PInom = NUMERIC(1 + invOffset, 3);
+    PImax = NUMERIC(2 + invOffset, 3);
+    InverterCurve = NUMERIC(3 + invOffset, 3);
+    if(InverterCurve == 1)
+        % Power efficiency curve parameters
+        k0 = NUMERIC(5 + invOffset, 3);
+        k1 = NUMERIC(6 + invOffset, 3);
+        k2 = NUMERIC(7 + invOffset, 3);
+    else
+        % Previous parameters from the power efficiency points
+        [k0, k1, k2] = InverterParameters(NUMERIC((10 + invOffset):(15 + invOffset), 2), NUMERIC((10 + invOffset):(15 + invOffset), 3));
+    end
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %End Inverter
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Grid Inverter (Only used in AC bus Application == 4)
+% Moved after Options section where Application is read
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Wiring.
@@ -226,6 +287,19 @@ GroundReflectance=NUMERIC(5,3);
 %Minimum irradiance required to injecting power in the grid, W/m2
 Gth=0;
 
+%Project Lifetime and Degradation
+if size(NUMERIC,1) >= 7 && ~isnan(NUMERIC(7,3))
+    Project_Lifetime = NUMERIC(7,3);
+else
+    Project_Lifetime = 1; % Default to 1 year if not specified
+end
+
+if size(NUMERIC,1) >= 8 && ~isnan(NUMERIC(8,3))
+    PV_Degradation_Rate = NUMERIC(8,3); % e.g., 0.008 for 0.8%
+else
+    PV_Degradation_Rate = 0; % Default to 0 degradation
+end
+
 %Number of simulated days.
 Ndays=365;
 %Simulation step, seconds. Up to one hour maximum.
@@ -239,8 +313,70 @@ end
 Nsteps=floor((24*60*60)/SimulationStep);
 %Number of simulation points per hour
 Stepph=3600/SimulationStep;
+
+%PV Distribution in Mixed Node (DC vs AC), Hybrid AC bus only (Application == 4)
+if Application == 4
+    %Re-read PVgen sheet to get PV_DC_share
+    [NUMERIC_PV, ~]=xlsread(file1,'PVgen');
+    % NUMERIC drops the first 3 text rows. So Excel Row 23 is NUMERIC Row 20.
+    if size(NUMERIC_PV,1) >= 21 && ~isnan(NUMERIC_PV(21,3))
+        PV_DC_share = NUMERIC_PV(21,3);
+    else
+        PV_DC_share = 0.5; % Default value if not specified
+    end
+else
+    PV_DC_share = 1.0; % All PV goes to DC bus for standalone and DC hybrid
+end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %End Options
+PlotEconomicsFlag = 1; % Generate economic charts by default
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Grid Inverter (Only used in AC bus Application == 4)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+if Application == 4
+    %Read the sheet
+    SheetName='GridInverter';
+    clear NUMERIC TXT RAW;
+    try
+        [NUMERIC, TXT, RAW]=xlsread(file1,SheetName);
+        
+        % Check if user wants to use database for GridInverter
+        if size(NUMERIC,1) >= 1 && ~isnan(NUMERIC(1,3))
+            Use_Database_GridInv = NUMERIC(1,3);
+        else
+            Use_Database_GridInv = 0; % Default to manual input
+        end
+        
+        if Use_Database_GridInv == 1
+            % Grid inverter name: Excel Row 5 col C (RAW uses Excel row/col directly)
+            grid_inverter_name = RAW{5, 3};
+            [PGInom, PGImax, k0_g, k1_g, k2_g] = Load_CEC_Inverter(grid_inverter_name, 'grid');
+        else
+            %Nominal output power, kW
+            PGInom=NUMERIC(3,3);
+            %Maximum output power, kW
+            PGImax=NUMERIC(4,3);
+            %Power efficiency curve
+            GridInverterCurve=NUMERIC(5,3);
+            if(GridInverterCurve==1)
+                %Power efficiency curve parameters
+                k0_g=NUMERIC(7,3);
+                k1_g=NUMERIC(8,3);
+                k2_g=NUMERIC(9,3);
+            else
+                %Previous parameters from the power efficiency points
+                [k0_g, k1_g, k2_g]=GridInverterParameters(NUMERIC(12:17,2), NUMERIC(12:17,3));
+            end
+        end
+    catch
+        warning('Worksheet ''GridInverter'' not found or incorrectly formatted. Hybrid AC bus systems require this sheet.');
+        error('Simulation stopped: Missing GridInverter data for Application=4');
+    end
+end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%End Grid Inverter
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -378,9 +514,88 @@ if(Application==3 || Application==4)
     Vci=NUMERIC(3,3);
     %Cut-out wind speed
     Vco=NUMERIC(4,3);
-    %Equivalent power coefficient (Cpeq=0,5·r·A·Cp), kW/(m/s)3    
+    %Equivalent power coefficient (Cpeq=0,5Â·rÂ·AÂ·Cp), kW/(m/s)3    
     Cpeq=PWnom/(Vnom^3-Vci^3);
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %End Wind
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Load MKBM Battery Parameters
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ReadBatteryMKBM;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Economics Parameters
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+try
+    SheetName='Economics';
+    clear NUMERIC TXT RAW;
+    [NUMERIC, TXT, RAW]=xlsread(file1,SheetName);
+    
+    if size(NUMERIC,1) >= 1 && ~isnan(NUMERIC(1,3))
+        PV_Module_Cost = NUMERIC(1,3);
+    else
+        PV_Module_Cost = 0;
+    end
+    
+    if size(NUMERIC,1) >= 2 && ~isnan(NUMERIC(2,3))
+        Inverter_Cost = NUMERIC(2,3);
+    else
+        Inverter_Cost = 0;
+    end
+    
+    if size(NUMERIC,1) >= 3 && ~isnan(NUMERIC(3,3))
+        Battery_Cost = NUMERIC(3,3);
+    else
+        Battery_Cost = 0;
+    end
+    
+    if size(NUMERIC,1) >= 4 && ~isnan(NUMERIC(4,3))
+        Genset_Cost = NUMERIC(4,3);
+    else
+        Genset_Cost = 0;
+    end
+    
+    if size(NUMERIC,1) >= 5 && ~isnan(NUMERIC(5,3))
+        Wind_Cost = NUMERIC(5,3);
+    else
+        Wind_Cost = 0;
+    end
+    
+    if size(NUMERIC,1) >= 6 && ~isnan(NUMERIC(6,3))
+        Fuel_Cost = NUMERIC(6,3);
+    else
+        Fuel_Cost = 0;
+    end
+    
+    if size(NUMERIC,1) >= 7 && ~isnan(NUMERIC(7,3))
+        Fixed_Installation_Cost = NUMERIC(7,3);
+    else
+        Fixed_Installation_Cost = 0;
+    end
+    
+    if size(NUMERIC,1) >= 8 && ~isnan(NUMERIC(8,3))
+        Opex_Factor = NUMERIC(8,3);
+    else
+        Opex_Factor = 0;
+    end
+    
+    if size(NUMERIC,1) >= 9 && ~isnan(NUMERIC(9,3))
+        Discount_Rate = NUMERIC(9,3);
+    else
+        Discount_Rate = 0;
+    end
+catch
+    disp('Warning: Could not read Economics sheet. Defaulting economic parameters to 0.');
+    PV_Module_Cost = 0;
+    Inverter_Cost = 0;
+    Battery_Cost = 0;
+    Genset_Cost = 0;
+    Wind_Cost = 0;
+    Fuel_Cost = 0;
+    Fixed_Installation_Cost = 0;
+    Opex_Factor = 0;
+    Discount_Rate = 0;
+end
+

@@ -63,6 +63,12 @@ if(Application==3 || Application==4)
     EGENm=MonthlySum(EGENd);
     %Wind energy
     EWINDm=MonthlySum(EWINDd);
+    %Dumped/excess energy
+    if exist('EDUMPd','var')
+        EDUMPm=MonthlySum(EDUMPd);
+    else
+        EDUMPm=zeros(1,12);
+    end
 end
 if(Application==5)
     %PV pumping

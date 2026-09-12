@@ -63,6 +63,12 @@ if(Application==3 || Application==4)
     EGENa=sum(EGENm);
     %Wind energy
     EWINDa=sum(EWINDm);
+    %Dumped/excess energy
+    if exist('EDUMPm','var')
+        EDUMPa=sum(EDUMPm);
+    else
+        EDUMPa=0;
+    end
 end
 if(Application==5)
     %PV pumping
