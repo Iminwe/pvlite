@@ -346,10 +346,10 @@ if Application == 4
         if size(NUMERIC,1) >= 1 && ~isnan(NUMERIC(1,3))
             Use_Database_GridInv = NUMERIC(1,3);
         else
-            Use_Database_GridInv = 0; % Default to manual input
+            Use_Database_GridInv = 1; % Default to manual input
         end
         
-        if Use_Database_GridInv == 1
+        if Use_Database_GridInv == 2
             % Grid inverter name: Excel Row 5 col C (RAW uses Excel row/col directly)
             grid_inverter_name = RAW{5, 3};
             [PGInom, PGImax, k0_g, k1_g, k2_g] = Load_CEC_Inverter(grid_inverter_name, 'grid');
