@@ -183,7 +183,7 @@ for d=1:Ndays
                     PWIND(h,d) = Req_RE - PPV(h,d);
                 end
                 %Overcharge flag
-                OVD(h,d)=1;
+                OVC(h,d)=1;
             end
         end
         %Update SOC

@@ -202,7 +202,7 @@ try
 catch
     %Sheet doesn't exist - use defaults
     warning('BatteryMKBM sheet not found in input file. Using default values.');
-    Use_Database_Bat = 0;
+    Use_Database_Bat = 1;
     Battery_Name = '';
     N_Batteries = 1;
     BatteryModel = 1;  %Use simple model by default for backward compatibility
